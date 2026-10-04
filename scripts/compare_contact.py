@@ -11,14 +11,22 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
+from sim2sim_profiles import get_profile, profile_names
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--mujoco", default="/home/mglf/rc/Mglf_sar/logs/sim2sim/go2w_contact_mujoco.csv")
-    parser.add_argument("--isaac", default="/home/mglf/rc/MglfLab/logs/sim2sim/go2w_contact_isaac.csv")
-    parser.add_argument("--out_dir", default="/home/mglf/rc/MglfLab/logs/sim2sim/contact_compare")
+    parser.add_argument("--profile", choices=profile_names(), default="go2w")
+    parser.add_argument("--mujoco", default=None)
+    parser.add_argument("--isaac", default=None)
+    parser.add_argument("--out_dir", default=None)
     parser.add_argument("--skip_steps", type=int, default=100)
-    return parser.parse_args()
+    args = parser.parse_args()
+    profile = get_profile(args.profile)
+    args.mujoco = args.mujoco or profile.contact_mujoco_log
+    args.isaac = args.isaac or profile.contact_isaac_log
+    args.out_dir = args.out_dir or f"/home/mglf/rc/MglfLab/logs/sim2sim/{profile.robot}_contact_compare"
+    return args
 
 
 def load_csv(path):
@@ -137,7 +145,7 @@ def main():
     mujoco = load_csv(args.mujoco)
     isaac = load_csv(args.isaac)
 
-    lines = [f"MuJoCo: {args.mujoco}", f"Isaac:  {args.isaac}", f"skip_steps: {args.skip_steps}", "", "Isaac - MuJoCo errors:"]
+    lines = [f"profile: {args.profile}", f"MuJoCo: {args.mujoco}", f"Isaac:  {args.isaac}", f"skip_steps: {args.skip_steps}", "", "Isaac - MuJoCo errors:"]
     keys = [
         "joint_vel",
         "projected_gravity_b",

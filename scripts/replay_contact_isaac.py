@@ -5,11 +5,13 @@ import csv
 from pathlib import Path
 
 from isaaclab.app import AppLauncher
+from sim2sim_profiles import get_profile, profile_names
 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("--task", default="Go2W-Flat-Handstand-Back-v0")
-parser.add_argument("--mujoco_log", default="/home/mglf/rc/Mglf_sar/logs/sim2sim/go2w_contact_mujoco.csv")
-parser.add_argument("--output", default="/home/mglf/rc/MglfLab/logs/sim2sim/go2w_contact_isaac.csv")
+parser.add_argument("--profile", choices=profile_names(), default="go2w")
+parser.add_argument("--task", default=None)
+parser.add_argument("--mujoco_log", default=None)
+parser.add_argument("--output", default=None)
 parser.add_argument("--steps", type=int, default=0)
 parser.add_argument("--render_every", type=int, default=4, help="Render every N physics steps when not headless.")
 parser.add_argument("--progress_every", type=int, default=100, help="Print progress every N steps.")
@@ -27,13 +29,10 @@ from isaaclab_tasks.utils import parse_env_cfg
 import mglf_lab  # noqa: F401
 
 
-MUJOCO_JOINT_NAMES = [
-    "FR_hip_joint", "FR_thigh_joint", "FR_calf_joint",
-    "FL_hip_joint", "FL_thigh_joint", "FL_calf_joint",
-    "RR_hip_joint", "RR_thigh_joint", "RR_calf_joint",
-    "RL_hip_joint", "RL_thigh_joint", "RL_calf_joint",
-    "FR_foot_joint", "FL_foot_joint", "RR_foot_joint", "RL_foot_joint",
-]
+PROFILE = get_profile(args_cli.profile)
+TASK = args_cli.task or PROFILE.isaac_task
+MUJOCO_LOG = args_cli.mujoco_log or PROFILE.contact_mujoco_log
+OUTPUT = args_cli.output or PROFILE.contact_isaac_log
 
 
 def read_targets(path):
@@ -60,23 +59,23 @@ def contact_summary(env):
 
 
 def main():
-    target_pos, target_vel = read_targets(args_cli.mujoco_log)
+    target_pos, target_vel = read_targets(MUJOCO_LOG)
     steps = target_pos.shape[0] if args_cli.steps <= 0 else min(args_cli.steps, target_pos.shape[0])
 
-    env_cfg = parse_env_cfg(args_cli.task, device=args_cli.device, num_envs=1)
+    env_cfg = parse_env_cfg(TASK, device=args_cli.device, num_envs=1)
     env_cfg.episode_length_s = max(float(getattr(env_cfg, "episode_length_s", 0.0)), 1.0e6)
-    env = gym.make(args_cli.task, cfg=env_cfg)
+    env = gym.make(TASK, cfg=env_cfg)
     env.reset()
 
     robot = env.unwrapped.scene["robot"]
     isaac_joint_names = list(robot.data.joint_names)
     num_dofs = min(target_pos.shape[1], robot.data.joint_pos.shape[1])
-    isaac_joint_ids = [isaac_joint_names.index(name) for name in MUJOCO_JOINT_NAMES[:num_dofs]]
+    isaac_joint_ids = [isaac_joint_names.index(name) for name in PROFILE.joint_names[:num_dofs]]
 
-    output = Path(args_cli.output)
+    output = Path(OUTPUT)
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("w", newline="") as f:
-        f.write(f"# source=isaacsim,task={args_cli.task},mujoco_log={args_cli.mujoco_log},dt={env.unwrapped.step_dt},num_of_dofs={num_dofs}\n")
+        f.write(f"# source=isaacsim,profile={PROFILE.name},task={TASK},mujoco_log={MUJOCO_LOG},dt={env.unwrapped.step_dt},num_of_dofs={num_dofs}\n")
         writer = csv.writer(f)
         header = ["step", "time"]
         header += [f"target_pos_{i}" for i in range(num_dofs)]
